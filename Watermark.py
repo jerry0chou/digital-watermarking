@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import pywt
+import ffmpeg
 
 def embed_watermark(frame, watermark, alpha=0.1):
     # Resize watermark to match frame size
@@ -109,3 +110,74 @@ def extract_watermark_from_video(original_video_path, watermarked_video_path, ou
 
     cap_orig.release()
     cap_wm.release()
+
+def read_av1_video(video_path):
+    probe = ffmpeg.probe(video_path)
+    video_info = next(stream for stream in probe['streams'] if stream['codec_type'] == 'video')
+    width = int(video_info['width'])
+    height = int(video_info['height'])
+    out, _ = (
+        ffmpeg
+        .input(video_path)
+        .output('pipe:', format='rawvideo', pix_fmt='bgr24')
+        .run(capture_stdout=True)
+    )
+    video = np.frombuffer(out, np.uint8).reshape([-1, height, width, 3])
+    return video
+
+def write_av1_video(frames, output_video_path, fps):
+    height, width = frames[0].shape[:2]
+    process = (
+        ffmpeg
+        .input('pipe:', format='rawvideo', pix_fmt='bgr24', s='{}x{}'.format(width, height), framerate=fps)
+        .output(output_video_path, vcodec='libaom-av1', crf=30, pix_fmt='yuv420p')
+        .overwrite_output()
+        .run_async(pipe_stdin=True)
+    )
+    for frame in frames:
+        process.stdin.write(frame.astype(np.uint8).tobytes())
+    process.stdin.close()
+    process.wait()
+
+# The embed_watermark and extract_watermark functions remain the same
+
+def embed_watermark_in_av1(input_video_path, output_video_path, watermark_image_path):
+    frames = read_av1_video(input_video_path)
+    watermark = cv2.imread(watermark_image_path)
+    watermarked_frames = []
+
+    for frame in frames:
+        watermarked_frame = embed_watermark(frame, watermark, alpha=0.1)
+        watermarked_frames.append(watermarked_frame)
+
+    fps = 30  # Set the FPS accordingly or extract from the original video
+    write_av1_video(watermarked_frames, output_video_path, fps)
+    print(f"Watermarked video saved as {output_video_path}")
+
+def extract_watermark_from_av1(original_video_path, watermarked_video_path, output_watermark_path):
+    frames_orig = read_av1_video(original_video_path)
+    frames_wm = read_av1_video(watermarked_video_path)
+    watermark_frames = []
+
+    for frame_orig, frame_wm in zip(frames_orig, frames_wm):
+        watermark_frame = extract_watermark(frame_orig, frame_wm, alpha=0.1)
+        watermark_frames.append(watermark_frame)
+
+    # Average the extracted watermark frames to reduce noise
+    watermark_average = np.mean(watermark_frames, axis=0)
+    watermark_average_uint8 = np.uint8(np.clip(watermark_average, 0, 255))
+    cv2.imwrite(output_watermark_path, watermark_average_uint8)
+    print(f"Extracted watermark saved as {output_watermark_path}")
+
+
+if __name__ == "__main__":
+    input_video = "input_av1_video.mkv"  # Your AV1-encoded input video
+    watermarked_video = "watermarked_av1_video.mkv"
+    watermark_image = "watermark.png"
+    extracted_watermark = "extracted_watermark.png"
+
+    # Embed watermark
+    embed_watermark_in_video(input_video, watermarked_video, watermark_image)
+
+    # Extract watermark
+    extract_watermark_from_video(input_video, watermarked_video, extracted_watermark)
