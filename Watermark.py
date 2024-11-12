@@ -5,6 +5,12 @@ import os
 import subprocess
 import matplotlib.pyplot as plt
 
+from utils import isWindows
+
+FFMPEG = 'ffmpeg'
+if isWindows():
+    FFMPEG = 'G:\\Temp\\ffmpeg\\bin\\ffmpeg.exe'
+
 def generate_watermark_pattern(size, key):
     np.random.seed(key)  # Use a seed for reproducibility
     watermark = np.random.rand(size[1], size[0]) * 255  # Generate random noise pattern
@@ -138,24 +144,29 @@ def embed_watermark_in_video(input_video_path, key, alpha=0.1):
     print(f"Watermarked video saved as {output_video_path}")
 
 def add_audio_to_video(original_video_path, video_no_audio_path, output_video_path):
-    # Use FFmpeg to extract audio and combine with watermarked video
 
-    ffmpeg_path = "G:\\Temp\\ffmpeg\\bin\\ffmpeg.exe"
-
-    if not os.path.isfile(ffmpeg_path):
-        print(f"FFmpeg not found at the specified path: {ffmpeg_path}")
+    ffmpeg_path = FFMPEG
+    # Check if input files exist
+    if not os.path.isfile(original_video_path):
+        print(f"Original video file not found: {original_video_path}")
         return
-    
+
+    if not os.path.isfile(video_no_audio_path):
+        print(f"Video without audio file not found: {video_no_audio_path}")
+        return
+
     command = [
         ffmpeg_path,
         '-y',  # Overwrite output files without asking
-        '-i', video_no_audio_path,
-        '-i', original_video_path,
-        '-c', 'copy',
-        '-map', '0:v:0',
-        '-map', '1:a:0',
-        output_video_path
+        '-i', video_no_audio_path,  # Input: video without audio
+        '-i', original_video_path,  # Input: original video with audio
+        '-c', 'copy',  # Copy both video and audio streams without re-encoding
+        '-map', '0:v?',  # Map video stream from the first input (watermarked video) ? stands for none v
+        '-map', '1:a?',  # Map audio stream from the second input (original video) ? stands for none a
+        output_video_path  # Output file
     ]
+    print('Running FFmpeg command:', ' '.join(command))
+    # Run the command
     result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if result.returncode != 0:
         print("FFmpeg command failed with the following error:")
