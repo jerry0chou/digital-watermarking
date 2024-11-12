@@ -3,7 +3,7 @@ import Watermark
 import os
 
 # Set your input video path and parameters
-input_video = "G:\\Temp\\Output\\967_raw.mp4" 
+input_video = "967_raw.mp4" 
 key = 12345                   # Key for watermark generation
 alpha = 5.0                   # Embedding strength (adjust as needed)
 

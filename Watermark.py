@@ -11,7 +11,7 @@ def generate_watermark_pattern(size, key):
     watermark_uint8 = np.uint8(watermark)
     return watermark_uint8
 
-def embed_watermark(frame, watermark, alpha=0.1):
+def embed_watermark(frame, watermark, alpha=5.0):
     # Convert frame to float32
     frame_float = np.float32(frame)
 
@@ -21,6 +21,7 @@ def embed_watermark(frame, watermark, alpha=0.1):
     for channel in channels:
         coeffs2 = pywt.dwt2(channel, 'haar')
         cA, (cH, cV, cD) = coeffs2
+        
 
         # Resize watermark to match the size of cH
         watermark_resized = cv2.resize(watermark, (cH.shape[1], cH.shape[0]))
@@ -30,9 +31,10 @@ def embed_watermark(frame, watermark, alpha=0.1):
         cH_watermarked = cH + alpha * watermark_normalized
         cV_watermarked = cV + alpha * watermark_normalized
         cD_watermarked = cD + alpha * watermark_normalized
+        cA_watermarked = cA + alpha * watermark_normalized
 
         # Reconstruct the channel with the watermarked coefficients
-        coeffs2_watermarked = (cA, (cH_watermarked, cV_watermarked, cD_watermarked))
+        coeffs2_watermarked = (cA_watermarked, (cH_watermarked, cV_watermarked, cD_watermarked))
         channel_watermarked = pywt.idwt2(coeffs2_watermarked, 'haar')
         watermarked_channels.append(channel_watermarked)
 
@@ -43,7 +45,7 @@ def embed_watermark(frame, watermark, alpha=0.1):
 
     return watermarked_frame_uint8
 
-def extract_watermark(frame_original, frame_watermarked, key, alpha=0.1):
+def extract_watermark(frame_original, frame_watermarked, key, alpha=5.0):
     # Convert frames to float32
     original_float = np.float32(frame_original)
     watermarked_float = np.float32(frame_watermarked)
@@ -91,7 +93,7 @@ def extract_watermark(frame_original, frame_watermarked, key, alpha=0.1):
 
     return extracted_watermark
 
-def embed_watermark_in_video(input_video_path, key, alpha=0.1):
+def embed_watermark_in_video(input_video_path, key, alpha=5.0):
     # Generate output video path by appending '_watermarked' to the input filename
     base, ext = os.path.splitext(input_video_path)
     temp_video_path = f"{base}_watermarked_temp{ext}"  # Temporary video without audio
@@ -163,7 +165,7 @@ def add_audio_to_video(original_video_path, video_no_audio_path, output_video_pa
     else:
         print("Audio successfully added to the video.")
 
-def detect_watermark_in_video(original_video_path, watermarked_video_path, key, alpha=0.1, threshold=0.0):
+def detect_watermark_in_video(original_video_path, watermarked_video_path, key, alpha=5.0, threshold=0.0):
     cap_orig = cv2.VideoCapture(original_video_path)
     cap_wm = cv2.VideoCapture(watermarked_video_path)
 
@@ -206,53 +208,57 @@ def detect_watermark_in_video(original_video_path, watermarked_video_path, key, 
         print("Watermark not detected or video has been tampered with.")
 
 def compute_correlation(frame_original, frame_watermarked, key, alpha=0.1):
+    # Ensure frames are the same size by cropping
+    height = min(frame_original.shape[0], frame_watermarked.shape[0])
+    width = min(frame_original.shape[1], frame_watermarked.shape[1])
+
+    frame_original_cropped = frame_original[:height, :width]
+    frame_watermarked_cropped = frame_watermarked[:height, :width]
+
+    # Debugging statements
+    #print(f"Cropped original frame shape: {frame_original_cropped.shape}")
+    #print(f"Cropped watermarked frame shape: {frame_watermarked_cropped.shape}")
+
     # Convert frames to float32
-    original_float = np.float32(frame_original)
-    watermarked_float = np.float32(frame_watermarked)
+    original_float = np.float32(frame_original_cropped)
+    watermarked_float = np.float32(frame_watermarked_cropped)
 
-    # Initialize correlation sum
-    correlation = 0.0  # Use a float scalar
+    correlation = 0.0
 
-    # Extract watermark from each channel
     for i in range(3):  # Assuming BGR channels
-        # DWT on original frame
+        # Apply DWT on both frames
         coeffs2_orig = pywt.dwt2(original_float[:, :, i], 'haar')
         _, (cH_orig, cV_orig, cD_orig) = coeffs2_orig
 
-        # DWT on watermarked frame
         coeffs2_wm = pywt.dwt2(watermarked_float[:, :, i], 'haar')
         _, (cH_wm, cV_wm, cD_wm) = coeffs2_wm
 
-        # Generate the same watermark pattern using the key
+        # Debugging statements
+        #print(f"Channel {i} cH_orig shape: {cH_orig.shape}, cH_wm shape: {cH_wm.shape}")
+
+        # Generate the same watermark pattern
         watermark_size = (cH_orig.shape[1], cH_orig.shape[0])
         watermark = generate_watermark_pattern(watermark_size, key)
-        watermark_normalized = watermark / 255.0
-
-        # Resize watermark_normalized to match coefficient sizes
-        watermark_normalized = cv2.resize(watermark_normalized, (cH_orig.shape[1], cH_orig.shape[0]))
+        watermark_normalized = cv2.resize(watermark / 255.0, (cH_orig.shape[1], cH_orig.shape[0]))
 
         # Extract the watermark components
         wH_extracted = (cH_wm - cH_orig) / alpha
         wV_extracted = (cV_wm - cV_orig) / alpha
         wD_extracted = (cD_wm - cD_orig) / alpha
 
-        # Calculate correlation for each component
-        corr_wH = np.sum(np.real(wH_extracted * watermark_normalized))
-        corr_wV = np.sum(np.real(wV_extracted * watermark_normalized))
-        corr_wD = np.sum(np.real(wD_extracted * watermark_normalized))
+        # Compute correlation
+        corr = np.sum(np.real(wH_extracted * watermark_normalized)) + \
+               np.sum(np.real(wV_extracted * watermark_normalized)) + \
+               np.sum(np.real(wD_extracted * watermark_normalized))
 
-        # Debugging statements
-        #print(f"Channel {i} correlations: wH={corr_wH}, wV={corr_wV}, wD={corr_wD}")
+        correlation += corr
 
-        # Accumulate the correlations
-        correlation += corr_wH + corr_wV + corr_wD
-
-    # Ensure correlation is a real scalar
-    correlation = np.real(correlation).item()
+    # Ensure correlation is a scalar
+    correlation = float(np.real(correlation))
 
     return correlation
 
-def extract_and_save_watermark(original_video_path, watermarked_video_path, key, alpha=0.1):
+def extract_and_save_watermark(original_video_path, watermarked_video_path, key, alpha=5.0):
     cap_orig = cv2.VideoCapture(original_video_path)
     cap_wm = cv2.VideoCapture(watermarked_video_path)
 
@@ -311,3 +317,10 @@ def extract_and_save_watermark(original_video_path, watermarked_video_path, key,
     plt.title('Extracted Watermark')
     plt.show()
 
+
+if __name__ == "__main__":
+    key = 12345
+    alpha = 5.0
+    inputVideo = "967_raw.mp4"
+    watermarked = "967-raw-watermarked_compress.mp4"
+    detect_watermark_in_video(inputVideo, watermarked, key, alpha, threshold=0.0)
