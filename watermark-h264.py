@@ -228,7 +228,7 @@ if __name__ == "__main__":
     extracted_watermark = "extracted_watermark.png"
 
     # Embed watermark (use h264 or av1 for output_codec)
-    # embed_watermark_in_video(input_video, watermarked_video, watermark_image, output_codec='h264')
+    embed_watermark_in_video(input_video, watermarked_video, watermark_image, output_codec='h264')
 
-    # Extract watermark
-    extract_watermark_from_video(input_video, watermarked_video, extracted_watermark)
+    # Extract watermark 报错 未解决
+    # extract_watermark_from_video(input_video, watermarked_video, extracted_watermark)
