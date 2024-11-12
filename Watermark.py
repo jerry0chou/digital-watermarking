@@ -3,6 +3,7 @@ import numpy as np
 import pywt
 import os
 import subprocess
+import matplotlib.pyplot as plt
 
 def generate_watermark_pattern(size, key):
     np.random.seed(key)  # Use a seed for reproducibility
@@ -47,8 +48,8 @@ def extract_watermark(frame_original, frame_watermarked, key, alpha=0.1):
     original_float = np.float32(frame_original)
     watermarked_float = np.float32(frame_watermarked)
 
-    # Initialize correlation sum
-    correlation = 0
+    # Initialize extracted watermark components
+    extracted_components = []
 
     # Extract watermark from each channel
     for i in range(3):  # Assuming BGR channels
@@ -60,22 +61,35 @@ def extract_watermark(frame_original, frame_watermarked, key, alpha=0.1):
         coeffs2_wm = pywt.dwt2(watermarked_float[:, :, i], 'haar')
         _, (cH_wm, cV_wm, cD_wm) = coeffs2_wm
 
-        # Generate the same watermark pattern using the key
-        watermark_size = (cH_orig.shape[1], cH_orig.shape[0])
-        watermark = generate_watermark_pattern(watermark_size, key)
-        watermark_normalized = watermark / 255.0
-
         # Extract the watermark components
         wH_extracted = (cH_wm - cH_orig) / alpha
         wV_extracted = (cV_wm - cV_orig) / alpha
         wD_extracted = (cD_wm - cD_orig) / alpha
 
-        # Calculate correlation
-        correlation += np.sum(wH_extracted * watermark_normalized)
-        correlation += np.sum(wV_extracted * watermark_normalized)
-        correlation += np.sum(wD_extracted * watermark_normalized)
+        # Average the extracted watermark components
+        watermark_extracted = (wH_extracted + wV_extracted + wD_extracted) / 3.0
 
-    return correlation
+        # Ensure the watermark is real-valued
+        watermark_extracted = np.real(watermark_extracted)
+
+        # Debugging statements
+        #print(f"Channel {i}:")
+        #print(f"Type of watermark_extracted: {type(watermark_extracted)}")
+        #print(f"Shape of watermark_extracted: {watermark_extracted.shape}")
+
+        extracted_components.append(watermark_extracted)
+
+    # Average over all channels
+    extracted_watermark = sum(extracted_components) / 3.0
+
+    # Ensure the extracted watermark is real-valued
+    extracted_watermark = np.real(extracted_watermark)
+
+    # Debugging statements
+    #print(f"Type of extracted_watermark: {type(extracted_watermark)}")
+    #print(f"Shape of extracted_watermark: {extracted_watermark.shape}")
+
+    return extracted_watermark
 
 def embed_watermark_in_video(input_video_path, key, alpha=0.1):
     # Generate output video path by appending '_watermarked' to the input filename
@@ -153,7 +167,7 @@ def detect_watermark_in_video(original_video_path, watermarked_video_path, key, 
     cap_orig = cv2.VideoCapture(original_video_path)
     cap_wm = cv2.VideoCapture(watermarked_video_path)
 
-    total_correlation = 0
+    total_correlation = 0.0  # Use a float scalar
     frame_count = 0
 
     while True:
@@ -163,9 +177,12 @@ def detect_watermark_in_video(original_video_path, watermarked_video_path, key, 
         if not ret_orig or not ret_wm:
             break
 
-        correlation = extract_watermark(frame_orig, frame_wm, key, alpha=alpha)
+        correlation = compute_correlation(frame_orig, frame_wm, key, alpha=alpha)
         total_correlation += correlation
         frame_count += 1
+
+        # Debugging statements
+        #print(f"Frame {frame_count}: correlation={correlation}")
 
     cap_orig.release()
     cap_wm.release()
@@ -177,6 +194,9 @@ def detect_watermark_in_video(original_video_path, watermarked_video_path, key, 
     # Average correlation over all frames
     average_correlation = total_correlation / frame_count
 
+    # Ensure average_correlation is a scalar
+    average_correlation = float(average_correlation)
+
     print(f"Average Correlation: {average_correlation}")
 
     # Decide whether the watermark is present
@@ -185,19 +205,109 @@ def detect_watermark_in_video(original_video_path, watermarked_video_path, key, 
     else:
         print("Watermark not detected or video has been tampered with.")
 
+def compute_correlation(frame_original, frame_watermarked, key, alpha=0.1):
+    # Convert frames to float32
+    original_float = np.float32(frame_original)
+    watermarked_float = np.float32(frame_watermarked)
 
+    # Initialize correlation sum
+    correlation = 0.0  # Use a float scalar
 
-if __name__ == "__main__":
-    input_video = "G:\\Temp\\Output\\967_raw.mp4"  # Your input video file (e.g., MP4, AVI)
-    key = 12345                   # Key for watermark generation (choose any integer)
+    # Extract watermark from each channel
+    for i in range(3):  # Assuming BGR channels
+        # DWT on original frame
+        coeffs2_orig = pywt.dwt2(original_float[:, :, i], 'haar')
+        _, (cH_orig, cV_orig, cD_orig) = coeffs2_orig
 
-    # Embed the invisible watermark into the video
-    embed_watermark_in_video(input_video, key=key, alpha=0.1)
+        # DWT on watermarked frame
+        coeffs2_wm = pywt.dwt2(watermarked_float[:, :, i], 'haar')
+        _, (cH_wm, cV_wm, cD_wm) = coeffs2_wm
 
-    # Generate watermarked video filename
-    base, ext = os.path.splitext(input_video)
-    watermarked_video = f"{base}_watermarked{ext}"
+        # Generate the same watermark pattern using the key
+        watermark_size = (cH_orig.shape[1], cH_orig.shape[0])
+        watermark = generate_watermark_pattern(watermark_size, key)
+        watermark_normalized = watermark / 255.0
 
-    # Detect the watermark in the watermarked video
-    detect_watermark_in_video(input_video, watermarked_video, key=key, alpha=0.1, threshold=0.0)
+        # Resize watermark_normalized to match coefficient sizes
+        watermark_normalized = cv2.resize(watermark_normalized, (cH_orig.shape[1], cH_orig.shape[0]))
+
+        # Extract the watermark components
+        wH_extracted = (cH_wm - cH_orig) / alpha
+        wV_extracted = (cV_wm - cV_orig) / alpha
+        wD_extracted = (cD_wm - cD_orig) / alpha
+
+        # Calculate correlation for each component
+        corr_wH = np.sum(np.real(wH_extracted * watermark_normalized))
+        corr_wV = np.sum(np.real(wV_extracted * watermark_normalized))
+        corr_wD = np.sum(np.real(wD_extracted * watermark_normalized))
+
+        # Debugging statements
+        #print(f"Channel {i} correlations: wH={corr_wH}, wV={corr_wV}, wD={corr_wD}")
+
+        # Accumulate the correlations
+        correlation += corr_wH + corr_wV + corr_wD
+
+    # Ensure correlation is a real scalar
+    correlation = np.real(correlation).item()
+
+    return correlation
+
+def extract_and_save_watermark(original_video_path, watermarked_video_path, key, alpha=0.1):
+    cap_orig = cv2.VideoCapture(original_video_path)
+    cap_wm = cv2.VideoCapture(watermarked_video_path)
+
+    frame_count = 0
+    accumulated_watermark = None
+
+    while True:
+        ret_orig, frame_orig = cap_orig.read()
+        ret_wm, frame_wm = cap_wm.read()
+
+        if not ret_orig or not ret_wm:
+            break
+
+        extracted_watermark = extract_watermark(frame_orig, frame_wm, key, alpha=alpha)
+
+        if accumulated_watermark is None:
+            accumulated_watermark = np.zeros_like(extracted_watermark, dtype=np.float64)
+
+        accumulated_watermark += extracted_watermark
+        frame_count += 1
+
+    cap_orig.release()
+    cap_wm.release()
+
+    if frame_count == 0:
+        print("No frames were processed.")
+        return
+
+    # Average the accumulated watermark over all frames
+    average_watermark = accumulated_watermark / frame_count
+
+    # Ensure the average watermark is real-valued
+    average_watermark = np.real(average_watermark)
+
+    # Normalize the extracted watermark to enhance visibility
+    min_val = np.min(average_watermark)
+    max_val = np.max(average_watermark)
+    print(f"Extracted watermark min value: {min_val}, max value: {max_val}")
+
+    # Avoid division by zero
+    if max_val - min_val > 0:
+        normalized_watermark = (average_watermark - min_val) / (max_val - min_val)
+        normalized_watermark = normalized_watermark * 255
+    else:
+        normalized_watermark = average_watermark
+
+    normalized_watermark_uint8 = np.uint8(np.clip(normalized_watermark, 0, 255))
+
+    # Save the extracted watermark image
+    base, _ = os.path.splitext(watermarked_video_path)
+    output_watermark_path = f"{base}_extracted_watermark.png"
+    cv2.imwrite(output_watermark_path, normalized_watermark_uint8)
+    print(f"Extracted watermark saved as {output_watermark_path}")
+
+    plt.imshow(normalized_watermark_uint8, cmap='gray')
+    plt.title('Extracted Watermark')
+    plt.show()
 
