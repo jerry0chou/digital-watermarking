@@ -4,7 +4,7 @@ import pywt
 import os
 import subprocess
 import matplotlib.pyplot as plt
-from utils import, isWindows,  blue_print, info_print
+from utils import isWindows,  blue_print, info_print
 FFMPEG = 'ffmpeg'
 if isWindows():
     FFMPEG = 'G:\\Temp\\ffmpeg\\bin\\ffmpeg.exe'
