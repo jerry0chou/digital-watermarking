@@ -46,8 +46,6 @@ def detect():
     Watermark.detect_watermark_in_video(input_video, watermarked_video, key=key, alpha=alpha, threshold=0.0)
 @tech_loading(text='')
 def detect_copy():
-    cyan_print("Option 3 selected")
-    copy_path = cyan_input('Please enter a path to copy original video to:')
     cyan_print('Comparing original video with duplicated video...')
     Watermark.detect_watermark_in_video(input_video, copy_path, key=key, alpha=alpha, threshold=0.0)
 @tech_loading(text='')
@@ -76,6 +74,8 @@ if __name__ == '__main__':
             elif num == 2:
                detect()
             elif num == 3:
+                cyan_print("Option 3 selected")
+                copy_path = cyan_input('Please enter a path to copy original video to')
                 detect_copy()
             elif num == 4:
                 extract()
