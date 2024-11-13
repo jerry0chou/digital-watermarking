@@ -5,7 +5,8 @@ import os
 import subprocess
 import matplotlib.pyplot as plt
 from utils import isWindows,  blue_print, info_print
-FFMPEG = 'ffmpeg'
+FFMPEG = '/opt/homebrew/bin/ffmpeg' # global path
+# you can only set it 'ffmpeg' if you only use it in current project
 if isWindows():
     FFMPEG = 'G:\\Temp\\ffmpeg\\bin\\ffmpeg.exe'
 

@@ -1,8 +1,8 @@
 # Import the watermarking module (assuming it's named 'video_watermarking.py')
 import Watermark
-import os
+import os, time
 import click
-from utils import isWindows
+from utils import isWindows, tech_loading
 
 # Set your input video path and parameters
 input_video = "star.mp4"
@@ -28,8 +28,39 @@ def menu():
 
 def cyan_print(str):
     click.echo(click.style(str, fg="cyan"))
+def cyan_input(s):
+    return click.prompt(click.style(s, fg="cyan"), type=str)
+
+# 实现旋转加载效果
+
+
+@tech_loading(text='')
+def embed():
+    cyan_print("Option 1 selected: Embedding watermark into video...")
+    Watermark.embed_watermark_in_video(input_video, key=key, alpha=alpha)
+@tech_loading(text='')
+def detect():
+    cyan_print("Option 2 selected: Comparing original video with watermarked video...")
+    base, ext = os.path.splitext(input_video)
+    watermarked_video = f"{base}_watermarked{ext}"
+    Watermark.detect_watermark_in_video(input_video, watermarked_video, key=key, alpha=alpha, threshold=0.0)
+@tech_loading(text='')
+def detect_copy():
+    cyan_print("Option 3 selected")
+    copy_path = cyan_input('Please enter a path to copy original video to:')
+    cyan_print('Comparing original video with duplicated video...')
+    Watermark.detect_watermark_in_video(input_video, copy_path, key=key, alpha=alpha, threshold=0.0)
+@tech_loading(text='')
+def extract():
+    cyan_print("Option 4 selected: Extracting watermark...")
+    base, ext = os.path.splitext(input_video)
+    watermarked_video = f"{base}_watermarked{ext}"
+    Watermark.extract_and_save_watermark(input_video, watermarked_video, key=key, alpha=alpha)
 
 if __name__ == '__main__':
+    # /Users/jerry/Desktop/star.mp4
+    # path = click.prompt(click.style("Please enter a video path", fg="cyan"), type=str)
+    # input_video = path
     while True:
         try:
             menu()
@@ -40,27 +71,16 @@ if __name__ == '__main__':
                 cyan_print("Exiting...")
                 break
             elif num == 1:
-                cyan_print("Option 1 selected: Embedding watermark into video...")
-                Watermark.embed_watermark_in_video(input_video, key=key, alpha=alpha)
+                embed()
                 # 这里可以加入相应的功能代码
             elif num == 2:
-                cyan_print("Option 2 selected: Comparing original video with watermarked video...")
-                base, ext = os.path.splitext(input_video)
-                watermarked_video = f"{base}_watermarked{ext}"
-                # Detect the watermark in the watermarked video
-                Watermark.detect_watermark_in_video(input_video, watermarked_video, key=key, alpha=alpha, threshold=0.0)
-                # 这里可以加入相应的功能代码
+               detect()
             elif num == 3:
-                cyan_print("Option 3 selected: Comparing original video with duplicated video...")
-
+                detect_copy()
             elif num == 4:
-                cyan_print("Option 4 selected: Extracting watermark...")
-                base, ext = os.path.splitext(input_video)
-                watermarked_video = f"{base}_watermarked{ext}"
-                Watermark.extract_and_save_watermark(input_video, watermarked_video, key=key, alpha=alpha)
+                extract()
             else:
                 cyan_print("Invalid option. Please enter a valid number.")
-
         except ValueError:
             cyan_print("Invalid input. Please enter a valid number.")
 
