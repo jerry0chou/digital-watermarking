@@ -4,8 +4,7 @@ import pywt
 import os
 import subprocess
 import matplotlib.pyplot as plt
-
-from utils import isWindows
+from utils import isWindows, blue_print, info_print
 
 FFMPEG = 'ffmpeg'
 if isWindows():
@@ -79,9 +78,9 @@ def extract_watermark(frame_original, frame_watermarked, key, alpha=0.1):
         watermark_extracted = np.real(watermark_extracted)
 
         # Debugging statements
-        #print(f"Channel {i}:")
-        #print(f"Type of watermark_extracted: {type(watermark_extracted)}")
-        #print(f"Shape of watermark_extracted: {watermark_extracted.shape}")
+        #info_print(f"Channel {i}:")
+        #info_print(f"Type of watermark_extracted: {type(watermark_extracted)}")
+        #info_print(f"Shape of watermark_extracted: {watermark_extracted.shape}")
 
         extracted_components.append(watermark_extracted)
 
@@ -92,8 +91,8 @@ def extract_watermark(frame_original, frame_watermarked, key, alpha=0.1):
     extracted_watermark = np.real(extracted_watermark)
 
     # Debugging statements
-    #print(f"Type of extracted_watermark: {type(extracted_watermark)}")
-    #print(f"Shape of extracted_watermark: {extracted_watermark.shape}")
+    #info_print(f"Type of extracted_watermark: {type(extracted_watermark)}")
+    #info_print(f"Shape of extracted_watermark: {extracted_watermark.shape}")
 
     return extracted_watermark
 
@@ -141,18 +140,18 @@ def embed_watermark_in_video(input_video_path, key, alpha=0.1):
     # Remove the temporary video file
     os.remove(temp_video_path)
 
-    print(f"Watermarked video saved as {output_video_path}")
+    info_print(f"Watermarked video saved as {output_video_path}")
 
 def add_audio_to_video(original_video_path, video_no_audio_path, output_video_path):
 
     ffmpeg_path = FFMPEG
     # Check if input files exist
     if not os.path.isfile(original_video_path):
-        print(f"Original video file not found: {original_video_path}")
+        info_print(f"Original video file not found: {original_video_path}")
         return
 
     if not os.path.isfile(video_no_audio_path):
-        print(f"Video without audio file not found: {video_no_audio_path}")
+        info_print(f"Video without audio file not found: {video_no_audio_path}")
         return
 
     command = [
@@ -165,14 +164,14 @@ def add_audio_to_video(original_video_path, video_no_audio_path, output_video_pa
         '-map', '1:a?',  # Map audio stream from the second input (original video) ? stands for none a
         output_video_path  # Output file
     ]
-    print('Running FFmpeg command:', ' '.join(command))
+    info_print('Running FFmpeg command:'+' '.join(command))
     # Run the command
     result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if result.returncode != 0:
-        print("FFmpeg command failed with the following error:")
-        print(result.stderr)
+        info_print("FFmpeg command failed with the following error:")
+        info_print(result.stderr)
     else:
-        print("Audio successfully added to the video.")
+        info_print("Audio successfully added to the video.")
 
 def detect_watermark_in_video(original_video_path, watermarked_video_path, key, alpha=0.1, threshold=0.0):
     cap_orig = cv2.VideoCapture(original_video_path)
@@ -193,13 +192,13 @@ def detect_watermark_in_video(original_video_path, watermarked_video_path, key, 
         frame_count += 1
 
         # Debugging statements
-        #print(f"Frame {frame_count}: correlation={correlation}")
+        #info_print(f"Frame {frame_count}: correlation={correlation}")
 
     cap_orig.release()
     cap_wm.release()
 
     if frame_count == 0:
-        print("No frames were processed.")
+        info_print("No frames were processed.")
         return
 
     # Average correlation over all frames
@@ -208,13 +207,13 @@ def detect_watermark_in_video(original_video_path, watermarked_video_path, key, 
     # Ensure average_correlation is a scalar
     average_correlation = float(average_correlation)
 
-    print(f"Average Correlation: {average_correlation}")
+    info_print(f"Average Correlation: {average_correlation}")
 
     # Decide whether the watermark is present
     if average_correlation > threshold:
-        print("Watermark detected.")
+        blue_print(f"Watermark detected. {os.path.basename(watermarked_video_path)} is identical to {os.path.basename(original_video_path)}.")
     else:
-        print("Watermark not detected or video has been tampered with.")
+        blue_print("Watermark not detected or video has been tampered with.")
 
 def compute_correlation(frame_original, frame_watermarked, key, alpha=0.1):
     # Convert frames to float32
@@ -253,7 +252,7 @@ def compute_correlation(frame_original, frame_watermarked, key, alpha=0.1):
         corr_wD = np.sum(np.real(wD_extracted * watermark_normalized))
 
         # Debugging statements
-        #print(f"Channel {i} correlations: wH={corr_wH}, wV={corr_wV}, wD={corr_wD}")
+        #info_print(f"Channel {i} correlations: wH={corr_wH}, wV={corr_wV}, wD={corr_wD}")
 
         # Accumulate the correlations
         correlation += corr_wH + corr_wV + corr_wD
@@ -289,7 +288,7 @@ def extract_and_save_watermark(original_video_path, watermarked_video_path, key,
     cap_wm.release()
 
     if frame_count == 0:
-        print("No frames were processed.")
+        info_print("No frames were processed.")
         return
 
     # Average the accumulated watermark over all frames
@@ -301,7 +300,7 @@ def extract_and_save_watermark(original_video_path, watermarked_video_path, key,
     # Normalize the extracted watermark to enhance visibility
     min_val = np.min(average_watermark)
     max_val = np.max(average_watermark)
-    print(f"Extracted watermark min value: {min_val}, max value: {max_val}")
+    info_print(f"Extracted watermark min value: {min_val}, max value: {max_val}")
 
     # Avoid division by zero
     if max_val - min_val > 0:
@@ -316,7 +315,7 @@ def extract_and_save_watermark(original_video_path, watermarked_video_path, key,
     base, _ = os.path.splitext(watermarked_video_path)
     output_watermark_path = f"{base}_extracted_watermark.png"
     cv2.imwrite(output_watermark_path, normalized_watermark_uint8)
-    print(f"Extracted watermark saved as {output_watermark_path}")
+    info_print(f"Extracted watermark saved as {output_watermark_path}")
 
     plt.imshow(normalized_watermark_uint8, cmap='gray')
     plt.title('Extracted Watermark')
