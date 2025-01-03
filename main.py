@@ -57,8 +57,8 @@ def extract():
 
 if __name__ == '__main__':
     # /Users/jerry/Desktop/star.mp4
-    # path = click.prompt(click.style("Please enter a video path", fg="cyan"), type=str)
-    # input_video = path
+    path = click.prompt(click.style("Please enter a video path", fg="cyan"), type=str)
+    input_video = path
     while True:
         try:
             menu()
